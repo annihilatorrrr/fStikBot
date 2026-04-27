@@ -93,3 +93,22 @@ const gracefulShutdown = (signal) => {
 }
 process.on('SIGTERM', gracefulShutdown)
 process.on('SIGINT', gracefulShutdown)
+
+// Postmortem logging for crashes. We don't suppress the default Node
+// behavior (it exits the process), we just make sure the cause is in
+// the log channel before PM2 restarts us. Without these, all we'd see
+// in PM2 logs is "process exited" with no stack trace.
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled rejection:', reason instanceof Error ? reason.stack : reason)
+  // Re-throw so Node's default termination kicks in — promise state may
+  // be inconsistent, restart is safer than continuing on corrupted state.
+  // Use setImmediate so the error bubbles to uncaughtException with full
+  // context, not swallowed by the rejection handler chain.
+  setImmediate(() => { throw reason })
+})
+
+process.on('uncaughtException', (err, origin) => {
+  console.error(`Uncaught exception (origin=${origin}):`, err?.stack || err)
+  // Don't try to clean up — state is unknown. PM2 will restart us.
+  process.exit(1)
+})
