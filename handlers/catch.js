@@ -4,6 +4,7 @@ const util = require('util')
 const execFile = util.promisify(require('child_process').execFile)
 const errorStackParser = require('error-stack-parser')
 const { escapeHTML, isRateLimitError, getRetryAfter } = require('../utils')
+const log = require('../utils/logger').scope('error-handler')
 
 // Probe once at module load: is .git available at project root?
 // Skip git blame entirely in environments without .git (e.g. Docker deploys)
@@ -69,12 +70,12 @@ async function errorLog (error, ctx) {
 
   if (error.description && error.description.includes('timeout')) return
 
-  if (!ctx.config) return console.error(errorText)
+  if (!ctx.config) return log.error(errorText)
 
   await ctx.telegram.sendMessage(ctx.config.logChatId, errorText, {
     parse_mode: 'HTML'
   }).catch((error) => {
-    console.error('send log error:', error)
+    log.error('send log error:', error)
   })
 
   if (ctx?.chat?.type === 'private') {
@@ -113,7 +114,7 @@ function isExpectedNoise (error) {
 module.exports = async (error, ctx) => {
   if (isExpectedNoise(error)) return
 
-  console.error(error)
+  log.error(error?.stack || error)
 
   // Handle 429 rate limit errors gracefully.
   // Note: withRetry already logs `[Retry] 429 on <method>` — no dup here.
@@ -130,6 +131,6 @@ module.exports = async (error, ctx) => {
   }
 
   errorLog(error, ctx).catch(e => {
-    console.error('errorLog error:', e)
+    log.error('errorLog itself failed:', e?.stack || e)
   })
 }
