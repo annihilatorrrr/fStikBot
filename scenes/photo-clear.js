@@ -82,7 +82,7 @@ photoClear.enter(async (ctx) => {
 })
 
 photoClear.on('photo', async (ctx) => {
-  ctx.replyWithChatAction('upload_document')
+  ctx.replyWithChatAction('upload_document').catch(() => {}) // chat action is best-effort UI, fire-and-forget OK
 
   if (ctx.session.userInfo.locale === 'ru' && !ctx.session.userInfo?.stickerSet?.boost) {
     showGramAds(ctx.chat.id)
@@ -160,7 +160,7 @@ photoClear.on('photo', async (ctx) => {
       .webp()
       .toBuffer()
 
-    ctx.replyWithDocument({
+    await ctx.replyWithDocument({
       source: trimBuffer,
       filename: `${model}_${photo.file_unique_id}.webp`
     }, {
@@ -181,7 +181,7 @@ photoClear.on('photo', async (ctx) => {
     const i18nKey = finish.error === 'Timeout'
       ? 'scenes.photoClear.error_timeout'
       : 'scenes.photoClear.error'
-    ctx.replyWithHTML(ctx.i18n.t(i18nKey))
+    await ctx.replyWithHTML(ctx.i18n.t(i18nKey))
   }
 })
 

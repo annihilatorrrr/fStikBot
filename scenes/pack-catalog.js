@@ -61,8 +61,8 @@ const createStickerSet = async (packName, userInfo) => {
 
 const catalogPublishNew = new Scene('catalogPublishNew')
 
-catalogPublishNew.enter((ctx) => {
-  ctx.replyWithHTML(ctx.i18n.t('scenes.catalog.publish.publish_new'), {
+catalogPublishNew.enter(async (ctx) => {
+  await ctx.replyWithHTML(ctx.i18n.t('scenes.catalog.publish.publish_new'), {
     reply_markup: Markup.keyboard([
       [
         { text: ctx.i18n.t('scenes.btn.cancel'), style: 'danger' }
@@ -156,8 +156,8 @@ catalogPublishNew.on(['sticker', 'text'], async (ctx) => {
 
 const catalogPublishOwnerProof = new Scene('catalogPublishOwnerProof')
 
-catalogPublishOwnerProof.enter((ctx) => {
-  ctx.replyWithHTML(ctx.i18n.t('scenes.catalog.publish.owner_proof'), {
+catalogPublishOwnerProof.enter(async (ctx) => {
+  await ctx.replyWithHTML(ctx.i18n.t('scenes.catalog.publish.owner_proof'), {
     reply_markup: Markup.keyboard([
       [
         { text: ctx.i18n.t('scenes.btn.cancel'), style: 'danger' }

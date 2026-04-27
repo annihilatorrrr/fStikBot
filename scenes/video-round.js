@@ -30,7 +30,7 @@ async function getQueuePosition (jobId) {
 }
 
 async function processVideo (ctx, fileUrl) {
-  ctx.replyWithChatAction('record_video_note')
+  ctx.replyWithChatAction('record_video_note').catch(() => {}) // chat action is best-effort UI
 
   if (ctx.session.userInfo?.locale === 'ru' && !ctx.session.userInfo?.stickerSet?.boost) {
     showGramAds(ctx.chat.id)

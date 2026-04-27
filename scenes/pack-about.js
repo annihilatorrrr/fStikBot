@@ -56,7 +56,7 @@ packAbout.use((ctx, next) => {
       showGramAds(ctx.chat.id)
     }
 
-    ctx.db.StickerSet.find({
+    return ctx.db.StickerSet.find({
       ownerTelegramId: sharedUserId
     }).select('_id name public').limit(500).lean().then((findPacks) => {
       let chunkedPacks = []
@@ -112,7 +112,7 @@ packAbout.use((ctx, next) => {
         )])
       }
 
-      ctx.replyWithHTML(ctx.i18n.t('userAbout.result', {
+      return ctx.replyWithHTML(ctx.i18n.t('userAbout.result', {
         userId: sharedUserId,
         packs: packsToReturn ? packsToReturn.join(', ') : ctx.i18n.t('userAbout.no_packs')
       }), {
@@ -120,8 +120,6 @@ packAbout.use((ctx, next) => {
         ...(keyboard.length > 0 ? Markup.inlineKeyboard(keyboard).extra() : {})
       })
     })
-
-    return
   }
   return next()
 })
