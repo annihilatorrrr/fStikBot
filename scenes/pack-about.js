@@ -70,12 +70,12 @@ packAbout.use((ctx, next) => {
               ctx.from.id === ctx.config.mainAdminId ||
               ctx?.session?.userInfo?.adminRights.includes('pack')
             ) {
-              return `<a href="https://t.me/addstickers/${pack.name}"><s>${pack.name}</s></a>`
+              return `<a href="https://t.me/addstickers/${escapeHTML(pack.name)}"><s>${escapeHTML(pack.name)}</s></a>`
             } else {
               return '<i>[hidden]</i>'
             }
           }
-          return `<a href="https://t.me/addstickers/${pack.name}">${pack.name}</a>`
+          return `<a href="https://t.me/addstickers/${escapeHTML(pack.name)}">${escapeHTML(pack.name)}</a>`
         })).reduce((resultArray, item, index) => {
           const chunkIndex = Math.floor(index / chunkSize)
 
@@ -148,12 +148,12 @@ packAbout.on(['sticker', 'text', 'forward'], async (ctx, next) => {
             ctx.from.id === ctx.config.mainAdminId ||
             ctx?.session?.userInfo?.adminRights.includes('pack')
           ) {
-            return `<a href="https://t.me/addstickers/${pack.name}"><s>${pack.name}</s></a>`
+            return `<a href="https://t.me/addstickers/${escapeHTML(pack.name)}"><s>${escapeHTML(pack.name)}</s></a>`
           } else {
             return '<i>[hidden]</i>'
           }
         }
-        return `<a href="https://t.me/addstickers/${pack.name}">${pack.name}</a>`
+        return `<a href="https://t.me/addstickers/${escapeHTML(pack.name)}">${escapeHTML(pack.name)}</a>`
       })).reduce((resultArray, item, index) => {
         const chunkIndex = Math.floor(index / chunkSize)
 
@@ -299,12 +299,12 @@ packAbout.on(['sticker', 'text', 'forward'], async (ctx, next) => {
           ctx.from.id === ctx.config.mainAdminId ||
           ctx?.session?.userInfo?.adminRights.includes('pack')
         ) {
-          return `<a href="https://t.me/addstickers/${pack.name}"><s>${pack.name}</s></a>`
+          return `<a href="https://t.me/addstickers/${escapeHTML(pack.name)}"><s>${escapeHTML(pack.name)}</s></a>`
         } else {
           return '<i>[hidden]</i>'
         }
       }
-      return `<a href="https://t.me/addstickers/${pack.name}">${pack.name}</a>`
+      return `<a href="https://t.me/addstickers/${escapeHTML(pack.name)}">${escapeHTML(pack.name)}</a>`
     })).reduce((resultArray, item, index) => {
       const chunkIndex = Math.floor(index / chunkSize)
 

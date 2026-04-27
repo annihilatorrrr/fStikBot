@@ -2,6 +2,7 @@ const Composer = require('telegraf/composer')
 const Markup = require('telegraf/markup')
 const replicators = require('telegraf/core/replicators')
 const moment = require('moment')
+const escapeHTML = require('../../utils/html-escape')
 
 const composer = new Composer()
 
@@ -173,7 +174,7 @@ composer.action(/admin:messaging:status:(.*)/, async (ctx, next) => {
     }
 
     resultText = '<b>📊 Message Campaign Status</b>\n\n'
-    resultText += `<b>🏷 Name:</b> ${messaging.name}\n`
+    resultText += `<b>🏷 Name:</b> ${escapeHTML(messaging.name)}\n`
     resultText += `<b>⏰ Scheduled for:</b> ${scheduledFormatted} ${scheduledRelative}\n`
     resultText += `<b>🗓 Created on:</b> ${createdFormatted}\n`
     resultText += `<b>📊 Status:</b> ${statusColors[messaging.status] || '⚪️'} ${statusTypes[messaging.status] || 'Unknown'}\n\n`
