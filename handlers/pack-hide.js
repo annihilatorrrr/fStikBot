@@ -61,5 +61,11 @@ module.exports = async (ctx) => {
     Markup.callbackButton(ctx.i18n.t(updatedSet.hide === true ? 'callback.pack.btn.restore' : 'callback.pack.btn.hide'), `hide_pack:${ctx.match[2]}`)
   ])
 
-  ctx.editMessageReplyMarkup(Markup.inlineKeyboard(inlineKeyboard)).catch(err => console.error('Failed to update pack visibility markup:', err.message))
+  try {
+    await ctx.editMessageReplyMarkup(Markup.inlineKeyboard(inlineKeyboard))
+  } catch (err) {
+    // Updating reply markup is best-effort UI sync. The DB state is already
+    // committed and the user got a toast, so silent log is fine here.
+    console.error('Failed to update pack visibility markup:', err.message)
+  }
 }

@@ -2,6 +2,8 @@ const Markup = require('telegraf/markup')
 const {
   addSticker
 } = require('../utils')
+const { humanizeTelegramError } = require('../utils/telegram-error')
+const { safeEditMessage } = require('../utils/safe-edit')
 
 module.exports = async (ctx) => {
   const sticker = await ctx.db.Sticker.findOne({
@@ -62,9 +64,7 @@ module.exports = async (ctx) => {
       } else if (result.error.telegram && result.error.telegram.description.includes('STICKERSET_INVALID')) {
         return ctx.answerCbQuery(ctx.i18n.t('callback.pack.error.copy'), true)
       } else if (result.error.telegram) {
-        return ctx.answerCbQuery(ctx.i18n.t('error.answerCbQuery.telegram', {
-          error: result.error.telegram.description
-        }), true)
+        return ctx.answerCbQuery(humanizeTelegramError(ctx, result.error.telegram), true)
       } else if (result.error.i18nKey) {
         return ctx.answerCbQuery(ctx.i18n.t(result.error.i18nKey), true)
       }
@@ -73,12 +73,12 @@ module.exports = async (ctx) => {
     newFileUniqueId = result.ok && result.ok.stickerInfo && result.ok.stickerInfo.file_unique_id
   }
 
-  ctx.answerCbQuery(ctx.i18n.t('callback.sticker.answerCbQuery.restored'))
+  await ctx.answerCbQuery(ctx.i18n.t('callback.sticker.answerCbQuery.restored'))
 
-  ctx.editMessageText(ctx.i18n.t('callback.sticker.restored'), {
+  await safeEditMessage(ctx, ctx.i18n.t('callback.sticker.restored'), {
     reply_markup: Markup.inlineKeyboard([
       { ...Markup.callbackButton(ctx.i18n.t('callback.sticker.btn.delete'), `delete_sticker:${newFileUniqueId}`, !!newFileUniqueId), style: 'danger' },
       { ...Markup.callbackButton(ctx.i18n.t('callback.sticker.btn.copy'), `restore_sticker:${newFileUniqueId}`, !!newFileUniqueId), style: 'primary' }
     ])
-  }).catch(err => console.error('Failed to edit restore confirmation:', err.message))
+  })
 }

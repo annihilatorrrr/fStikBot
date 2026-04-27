@@ -1,4 +1,7 @@
 const Markup = require('telegraf/markup')
+const escapeHTML = require('../utils/html-escape')
+const { humanizeTelegramError } = require('../utils/telegram-error')
+const { safeEditMessage } = require('../utils/safe-edit')
 
 module.exports = async (ctx) => {
   let packBotUsername
@@ -11,7 +14,7 @@ module.exports = async (ctx) => {
 
   sticker = await ctx.db.Sticker.findOne({
     fileUniqueId: ctx.match[2]
-  }).populate('stickerSet', '_id name owner inline passcode')
+  }).populate('stickerSet', '_id name title owner inline passcode')
 
   if (!sticker) {
     let setName
@@ -96,7 +99,6 @@ module.exports = async (ctx) => {
     return ctx.answerCbQuery(ctx.i18n.t('callback.sticker.error.not_found'), true)
   }
 
-  let deleteStickerFromSet
   if (ctx.session?.userInfo?.stickerSet?.passcode === 'public') {
     const stickerSet = await ctx.tg.getStickerSet(sticker.stickerSet.name).catch(() => null)
 
@@ -105,30 +107,31 @@ module.exports = async (ctx) => {
     }
   }
 
-  if (sticker?.stickerSet?.inline) {
-    // Inline stickers - just mark as deleted in DB (no Telegram API call needed)
-    deleteStickerFromSet = true
-  } else {
-    deleteStickerFromSet = await ctx.deleteStickerFromSet(deleteSticker).catch((error) => {
-      ctx.answerCbQuery(ctx.i18n.t('error.answerCbQuery.telegram', {
-        error: error?.description || error?.message || 'Unknown error'
-      }), true)
-    })
+  if (!sticker?.stickerSet?.inline) {
+    try {
+      await ctx.deleteStickerFromSet(deleteSticker)
+    } catch (error) {
+      return ctx.answerCbQuery(humanizeTelegramError(ctx, error), true)
+    }
   }
 
-  if (deleteStickerFromSet) {
-    ctx.answerCbQuery(ctx.i18n.t('callback.sticker.answerCbQuery.delete'))
+  await ctx.answerCbQuery(ctx.i18n.t('callback.sticker.answerCbQuery.delete'))
 
-    ctx.editMessageText(ctx.i18n.t('callback.sticker.delete'), {
-      reply_markup: Markup.inlineKeyboard([
-        { ...Markup.callbackButton(ctx.i18n.t('callback.sticker.btn.restore'), `restore_sticker:${sticker?.fileUniqueId}`, !sticker), style: 'success' }
-      ])
-    }).catch(err => console.error('Failed to edit delete confirmation:', err.message))
+  const packTitle = sticker?.stickerSet?.title
+  const successText = packTitle
+    ? `${ctx.i18n.t('callback.sticker.delete')}\n\n📦 <i>${escapeHTML(packTitle)}</i>`
+    : ctx.i18n.t('callback.sticker.delete')
 
-    if (sticker) {
-      sticker.deleted = true
-      sticker.deletedAt = new Date()
-      await sticker.save()
-    }
+  await safeEditMessage(ctx, successText, {
+    parse_mode: 'HTML',
+    reply_markup: Markup.inlineKeyboard([
+      { ...Markup.callbackButton(ctx.i18n.t('callback.sticker.btn.restore'), `restore_sticker:${sticker?.fileUniqueId}`, !sticker), style: 'success' }
+    ])
+  })
+
+  if (sticker) {
+    sticker.deleted = true
+    sticker.deletedAt = new Date()
+    await sticker.save()
   }
 }

@@ -2,6 +2,7 @@ const Scene = require('telegraf/scenes/base')
 const Markup = require('telegraf/markup')
 const { match } = require('telegraf-i18n')
 const { escapeHTML } = require('../utils')
+const { humanizeTelegramError } = require('../utils/telegram-error')
 
 const packDelete = new Scene('packDelete')
 
@@ -21,7 +22,8 @@ packDelete.enter(async (ctx) => {
     id: 'packDelete',
     data: {
       id: stickerSet._id,
-      name: stickerSet.name
+      name: stickerSet.name,
+      title: stickerSet.title
     }
   }
 
@@ -42,27 +44,26 @@ packDelete.enter(async (ctx) => {
 
 packDelete.hears(match('scenes.delete_pack.confirm'), async (ctx) => {
   if (!ctx.session.scene?.data) return ctx.scene.leave()
-  const result = await ctx.telegram.callApi('deleteStickerSet', {
-    name: ctx.session.scene.data.name
-  }).catch(error => { return { error } })
 
-  if (result.error) {
-    const errorMessage = (result.error && (result.error.message || result.error.description)) || ''
-    if (errorMessage.includes('STICKERSET_INVALID')) {
-      await ctx.db.StickerSet.deleteOne({
-        _id: ctx.session.scene.data.id
-      })
+  const { id, name, title } = ctx.session.scene.data
+  const successText = title
+    ? `${ctx.i18n.t('scenes.delete_pack.success')}\n\n📦 <i>${escapeHTML(title)}</i>`
+    : ctx.i18n.t('scenes.delete_pack.success')
 
-      return ctx.replyWithHTML(ctx.i18n.t('scenes.delete_pack.success'), {
+  try {
+    await ctx.telegram.callApi('deleteStickerSet', { name })
+  } catch (error) {
+    const description = error?.description || error?.message || ''
+
+    if (description.includes('STICKERSET_INVALID')) {
+      // Pack already gone in Telegram — clean DB and treat as success.
+      await ctx.db.StickerSet.deleteOne({ _id: id })
+      return ctx.replyWithHTML(successText, {
         reply_markup: Markup.removeKeyboard()
       })
-    } else {
-      throw result.error
     }
-  }
 
-  if (!result) {
-    return ctx.replyWithHTML(ctx.i18n.t('scenes.delete_pack.error'), {
+    return ctx.replyWithHTML(humanizeTelegramError(ctx, error), {
       reply_markup: Markup.keyboard([
         [
           { text: ctx.i18n.t('scenes.btn.cancel'), style: 'danger' }
@@ -71,21 +72,14 @@ packDelete.hears(match('scenes.delete_pack.confirm'), async (ctx) => {
     })
   }
 
-  // Mark sticker set as deleted
-  await ctx.db.StickerSet.updateOne({
-    _id: ctx.session.scene.data.id
-  }, {
-    deleted: true
-  })
-
-  // Mark all stickers for TTL cleanup (30 days)
+  await ctx.db.StickerSet.updateOne({ _id: id }, { deleted: true })
   await ctx.db.Sticker.updateMany({
-    stickerSet: ctx.session.scene.data.id
+    stickerSet: id
   }, {
     $set: { deleted: true, deletedAt: new Date() }
   })
 
-  await ctx.replyWithHTML(ctx.i18n.t('scenes.delete_pack.success'), {
+  await ctx.replyWithHTML(successText, {
     reply_markup: Markup.removeKeyboard()
   })
 })
