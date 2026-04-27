@@ -1,6 +1,7 @@
 /* eslint-disable camelcase */
 const config = require('../config.json')
 const telegram = require('./telegram')
+const log = require('./logger').scope('update-monitor')
 
 // Backlog-size monitor. Note this is NOT a hang detector: it runs INSIDE
 // the event loop via setInterval — if the loop were truly blocked, this
@@ -26,28 +27,31 @@ const WARN_THRESHOLD = 40
 const ALERT_THRESHOLD = 250
 
 const updateMonitor = async () => {
-  const webhookInfo = await telegram.getWebhookInfo().catch(console.error)
+  const webhookInfo = await telegram.getWebhookInfo().catch((err) => {
+    log.error('getWebhookInfo failed:', err?.description || err?.message)
+    return null
+  })
   if (!webhookInfo) return
 
   const { pending_update_count } = webhookInfo
 
   if (pending_update_count > ALERT_THRESHOLD) {
-    console.error(`[update-monitor] pending=${pending_update_count} (high)`)
+    log.error(`pending=${pending_update_count} (high)`)
     await telegram.sendMessage(
       config.logChatId,
       `❌ pending updates: <b>${pending_update_count}</b> — backlog is not clearing`,
       { parse_mode: 'HTML' }
-    ).catch(console.error)
+    ).catch((err) => log.error('sendMessage to log channel failed:', err?.description || err?.message))
     return
   }
 
   if (pending_update_count > WARN_THRESHOLD && pending_update_count % 10 === 0) {
-    console.warn(`[update-monitor] pending=${pending_update_count}`)
+    log.warn(`pending=${pending_update_count}`)
     await telegram.sendMessage(
       config.logChatId,
       `⚠️ pending updates: <b>${pending_update_count}</b>`,
       { parse_mode: 'HTML' }
-    ).catch(console.error)
+    ).catch((err) => log.error('sendMessage to log channel failed:', err?.description || err?.message))
   }
 }
 
