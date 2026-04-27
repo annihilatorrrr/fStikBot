@@ -344,15 +344,18 @@ const processMosaic = async (ctx, rows, cols) => {
     // Get all sticker IDs in one API call (instead of N calls during upload)
     const setInfo = await ctx.telegram.callApi('getStickerSet', { name: stickerSet.name })
     const addedStickers = setInfo.stickers.slice(-total)
-    for (const sticker of addedStickers) {
+    // Parallel DB writes — addSticker only creates a new doc per call, no
+    // shared counter, no race. Synchronous pushes to uploadedIds/Ids
+    // preserve mosaic position order regardless of resolution order.
+    await Promise.all(addedStickers.map((sticker) => {
       uploadedIds.push(sticker.custom_emoji_id)
       uploadedFileIds.push(sticker.file_id)
-      await ctx.db.Sticker.addSticker(stickerSet.id, '🔲', {
+      return ctx.db.Sticker.addSticker(stickerSet.id, '🔲', {
         file_id: sticker.file_id,
         file_unique_id: sticker.file_unique_id,
         stickerType: 'custom_emoji'
       })
-    }
+    }))
 
     // Delete progress message
     await ctx.telegram.deleteMessage(ctx.chat.id, progressMsg.message_id).catch(() => {})

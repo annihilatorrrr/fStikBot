@@ -67,7 +67,7 @@ module.exports = async (ctx, next) => {
     sticker: sticker.getFileId(),
     emoji_list: emojis
   }).catch((error) => {
-    console.log(error)
+    console.error('setStickerEmojiList failed:', error?.description || error?.message)
   })
 
   if (updateResult) {
