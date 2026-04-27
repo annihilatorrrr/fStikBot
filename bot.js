@@ -26,6 +26,7 @@ const registerMiddleware = require('./bot/middleware')
 const registerCommands = require('./bot/commands')
 const launch = require('./bot/launch')
 const syncLocales = require('./bot/locale-sync')
+const { runPreflight } = require('./bot/preflight')
 
 global.startDate = new Date()
 
@@ -70,8 +71,12 @@ registerCommands(bot, privateMessage, {
   scenes
 })
 
-db.connection.once('open', async () => {
-  console.log('Connected to MongoDB')
+// Preflight runs the gauntlet before we accept any updates: validates
+// env vars, waits for Mongo with a hard timeout, and pings Telegram
+// getMe to verify the token. Any failure aborts with exit(1) so PM2
+// surfaces the problem immediately instead of restarting a silent bot.
+;(async () => {
+  await runPreflight({ bot, dbConnection: db.connection })
 
   await launch(bot)
 
@@ -83,6 +88,9 @@ db.connection.once('open', async () => {
 
   const monitorInterval = setInterval(() => updateMonitor(), MONITOR_INTERVAL_MS)
   if (monitorInterval.unref) monitorInterval.unref()
+})().catch((err) => {
+  console.error('Startup failed:', err?.stack || err)
+  process.exit(1)
 })
 
 // Graceful shutdown — PM2 sends SIGTERM before killing
