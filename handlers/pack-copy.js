@@ -1,9 +1,17 @@
 const Markup = require('telegraf/markup')
+const { humanizeTelegramError, matchTelegramErrorReason } = require('../utils/telegram-error')
 
 module.exports = async (ctx) => {
   if (!ctx.session.userInfo) ctx.session.userInfo = await ctx.db.User.getData(ctx.from)
 
-  const getStickerSet = await ctx.telegram.getStickerSet(ctx.match[2]).catch(err => console.error('Failed to get sticker set:', err.message))
+  let getStickerSet
+  let fetchError
+  try {
+    getStickerSet = await ctx.telegram.getStickerSet(ctx.match[2])
+  } catch (err) {
+    fetchError = err
+    console.error('pack-copy: getStickerSet failed:', err.message)
+  }
 
   if (getStickerSet && getStickerSet.stickers.length > 0) {
     ctx.session.scene.copyPack = getStickerSet
@@ -30,7 +38,14 @@ module.exports = async (ctx) => {
     return ctx.scene.enter('newPack')
   }
 
-  await ctx.replyWithHTML(ctx.i18n.t('callback.pack.error.copy'), {
+  // Surface the specific cause (rate-limited, pack deleted, etc.) when we
+  // have a Telegram error to interpret; otherwise fall back to the
+  // generic "pack not found" copy.
+  const errorText = fetchError && matchTelegramErrorReason(fetchError)
+    ? humanizeTelegramError(ctx, fetchError)
+    : ctx.i18n.t('callback.pack.error.copy')
+
+  await ctx.replyWithHTML(errorText, {
     reply_to_message_id: ctx.message.message_id,
     allow_sending_without_reply: true
   })

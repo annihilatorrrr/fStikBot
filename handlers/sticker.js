@@ -323,11 +323,19 @@ module.exports = async (ctx, next) => {
           const { messageText, replyMarkup } = addStickerText(stickerInfo, ctx.i18n.locale())
 
           if (messageText) {
-            await ctx.replyWithHTML(messageText, {
-              reply_to_message_id: message.message_id,
-              allow_sending_without_reply: true,
-              reply_markup: replyMarkup
-            }).catch(err => console.error('[sticker.bg] reply failed:', err.message))
+            try {
+              await ctx.replyWithHTML(messageText, {
+                reply_to_message_id: message.message_id,
+                allow_sending_without_reply: true,
+                reply_markup: replyMarkup
+              })
+            } catch (err) {
+              console.error('[sticker.bg] reply with reply_to failed:', err.message)
+              // Retry without reply_to_message_id — covers the case where the
+              // user deleted their original sticker while bg removal was running.
+              await ctx.replyWithHTML(messageText, { reply_markup: replyMarkup })
+                .catch(retryErr => console.error('[sticker.bg] retry reply failed:', retryErr.message))
+            }
           }
 
           if (
