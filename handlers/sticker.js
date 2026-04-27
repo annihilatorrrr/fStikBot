@@ -251,7 +251,8 @@ module.exports = async (ctx, next) => {
     if (message.caption && message.caption.includes('cropit')) stickerFile.forceCrop = true
     if (message.photo && message.caption && message.caption.includes('!')) stickerFile.removeBg = true
 
-    // Check for duplicates: by fileUniqueId, original.fileUniqueId, or legacy file.file_unique_id
+    // Check for duplicates: by fileUniqueId, original.fileUniqueId, or legacy file.file_unique_id.
+    // .lean() — read-only path, only reads .id and .fileUniqueId; skips Mongoose doc hydration.
     const sticker = await ctx.db.Sticker.findOne({
       stickerSet,
       deleted: false,
@@ -260,11 +261,11 @@ module.exports = async (ctx, next) => {
         { 'original.fileUniqueId': stickerFile.file_unique_id },
         { 'file.file_unique_id': stickerFile.file_unique_id }
       ]
-    })
+    }).lean()
 
     if (sticker) {
       ctx.session.previousSticker = {
-        id: sticker.id
+        id: sticker._id.toString()
       }
 
       await ctx.replyWithHTML(ctx.i18n.t('sticker.add.error.have_already'), {
