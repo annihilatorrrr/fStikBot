@@ -255,12 +255,12 @@ adminMessagingSelectGroup.action(/admin:messaging:group:(.*)/, async (ctx) => {
   if (!ctx.session.scene) ctx.session.scene = {}
   ctx.session.scene.type = ctx.match[1]
 
-  ctx.scene.enter('adminMessagingСonfirmation')
+  ctx.scene.enter('adminMessagingConfirmation')
 })
 
-const adminMessagingСonfirmation = new Scene('adminMessagingСonfirmation')
+const adminMessagingConfirmation = new Scene('adminMessagingConfirmation')
 
-adminMessagingСonfirmation.enter(async (ctx) => {
+adminMessagingConfirmation.enter(async (ctx) => {
   if (!ctx.session.scene?.type) return ctx.scene.leave()
   let findUsers = {}
   const monthAgo = moment().subtract(1, 'month')
@@ -589,7 +589,7 @@ module.exports = [
   adminMessagingMessageUrl,
   adminMessagingSelectDate,
   adminMessagingSelectGroup,
-  adminMessagingСonfirmation,
+  adminMessagingConfirmation,
   adminMessagingMessageEdit,
   adminMessagingPublish
 ]
