@@ -3,6 +3,7 @@ const Markup = require('telegraf/markup')
 const replicators = require('telegraf/core/replicators')
 const moment = require('moment')
 const escapeHTML = require('../../utils/html-escape')
+const { tolerantEditMessage } = require('../../utils/safe-edit')
 
 const composer = new Composer()
 
@@ -61,10 +62,10 @@ composer.action(/admin:messaging:cancel:(.*)/, async (ctx, next) => {
     ]
   ])
 
-  await ctx.editMessageText(resultText, {
+  await tolerantEditMessage(ctx, resultText, {
     parse_mode: 'HTML',
     reply_markup: replyMarkup
-  }).catch(() => {})
+  })
 })
 
 composer.action(/admin:messaging:list:(.*):(.*)/, async (ctx, next) => {
@@ -116,10 +117,10 @@ composer.action(/admin:messaging:list:(.*):(.*)/, async (ctx, next) => {
 
   const replyMarkup = Markup.inlineKeyboard(inlineKeyboard)
 
-  await ctx.editMessageText(resultText, {
+  await tolerantEditMessage(ctx, resultText, {
     parse_mode: 'HTML',
     reply_markup: replyMarkup
-  }).catch(() => {})
+  })
 })
 
 composer.action(/admin:messaging:status:(.*)/, async (ctx, next) => {
@@ -218,11 +219,11 @@ composer.action(/admin:messaging:status:(.*)/, async (ctx, next) => {
     ])
   }
 
-  await ctx.editMessageText(resultText, {
+  await tolerantEditMessage(ctx, resultText, {
     parse_mode: 'HTML',
     reply_markup: replyMarkup,
     disable_web_page_preview: true
-  }).catch(() => {})
+  })
 })
 
 composer.action(/admin:messaging:create/, async (ctx, next) => {
@@ -239,10 +240,10 @@ composer.action(/admin:messaging/, async (ctx, next) => {
     [Markup.callbackButton('Back to admin', 'admin:back')]
   ])
 
-  await ctx.editMessageText(resultText, {
+  await tolerantEditMessage(ctx, resultText, {
     parse_mode: 'HTML',
     reply_markup: replyMarkup
-  }).catch(() => {})
+  })
 })
 
 module.exports = composer
