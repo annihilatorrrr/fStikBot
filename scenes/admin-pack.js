@@ -47,41 +47,44 @@ adminPackFind.on(['sticker', 'text', 'custom_emoji'], async (ctx) => {
     return ctx.replyWithHTML('❌ Invalid input. Please send a sticker, custom emoji, pack URL, or pack name.')
   }
 
+  let stickerSet
   try {
-    let stickerSet
+    stickerSet = await ctx.telegram.getStickerSet(packName)
+  } catch (firstErr) {
+    // Pack not found as a sticker set — try emoji set lookup before giving up.
     try {
-      stickerSet = await ctx.telegram.getStickerSet(packName)
-    } catch (error) {
-      // If getStickerSet fails, try getCustomEmojiStickers
       const customEmojiStickers = await ctx.telegram.getCustomEmojiStickers([packName.split('_')[0]])
-      if (customEmojiStickers && customEmojiStickers.length > 0) {
+      if (customEmojiStickers?.length > 0) {
         stickerSet = {
           name: packName,
           title: 'Custom Emoji Set',
           is_emoji: true,
           stickers: customEmojiStickers
         }
-      } else {
-        throw new Error('Sticker set or custom emoji set not found')
       }
+    } catch (secondErr) {
+      console.error('admin-pack: emoji set lookup failed:', secondErr.message)
     }
-
-    const info = await ctx.db.StickerSet.findOne({ name: packName })
-
-    if (!stickerSet) {
-      return ctx.replyWithHTML('❌ Sticker pack or custom emoji set not found. Please check the name and try again.')
-    }
-
-    if (packName.split('_').pop() !== ctx.options.username) {
-      return ctx.replyWithHTML('⚠️ This pack/set is not managed by this bot. You can only manage packs/sets created with this bot.')
-    }
-
-    ctx.session.admin = { editPack: stickerSet, info }
-    await ctx.scene.enter('adminPackEdit')
-  } catch (error) {
-    console.error('Error fetching sticker set or custom emoji set:', error)
-    return ctx.replyWithHTML('❌ An error occurred while fetching the pack/set. Please try again later.')
   }
+
+  if (!stickerSet) {
+    return ctx.replyWithHTML(`❌ Pack/emoji set <code>${escapeHTML(packName)}</code> not found. Check the name and try again.`)
+  }
+
+  if (packName.split('_').pop() !== ctx.options.username) {
+    return ctx.replyWithHTML('⚠️ This pack/set is not managed by this bot. You can only manage packs/sets created with this bot.')
+  }
+
+  let info
+  try {
+    info = await ctx.db.StickerSet.findOne({ name: packName })
+  } catch (dbErr) {
+    console.error('admin-pack: DB lookup failed:', dbErr.message)
+    return ctx.replyWithHTML('❌ Database error while fetching pack info. Try again later.')
+  }
+
+  ctx.session.admin = { editPack: stickerSet, info }
+  await ctx.scene.enter('adminPackEdit')
 })
 
 const adminPackEdit = new Scene('adminPackEdit')
