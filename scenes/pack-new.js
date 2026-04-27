@@ -13,6 +13,7 @@ const {
   countUncodeChars,
   substrUnicode
 } = require('../utils')
+const { humanizeTelegramError } = require('../utils/telegram-error')
 
 const { match } = I18n
 
@@ -397,20 +398,23 @@ newPackConfirm.enter(async (ctx, next) => {
       await ctx.telegram.deleteMessage(ctx.chat.id, waitMessage.message_id)
 
       if (createNewStickerSet.error) {
+        // In create-flow, STICKERSET_INVALID actually means "name not
+        // accepted" — Telegram quirk where this code surfaces on
+        // create. Keep the context-specific mapping; fall back to the
+        // generic humanizer for everything else.
         if (createNewStickerSet.error.description === 'STICKERSET_INVALID') {
           await ctx.replyWithHTML(ctx.i18n.t('scenes.new_pack.error.telegram.name_occupied'), {
             reply_to_message_id: ctx.message.message_id,
             allow_sending_without_reply: true
           })
           return ctx.scene.enter('newPackName')
-        } else {
-          return ctx.replyWithHTML(ctx.i18n.t('error.telegram', {
-            error: createNewStickerSet.error.description
-          }), {
-            reply_to_message_id: ctx.message.message_id,
-            allow_sending_without_reply: true
-          })
         }
+
+        await ctx.replyWithHTML(humanizeTelegramError(ctx, createNewStickerSet.error), {
+          reply_to_message_id: ctx.message.message_id,
+          allow_sending_without_reply: true
+        })
+        return ctx.scene.enter('newPackName')
       }
     } else {
       const uploadedSticker = await ctx.telegram.callApi('uploadStickerFile', {
@@ -440,28 +444,25 @@ newPackConfirm.enter(async (ctx, next) => {
 
       if (createNewStickerSet.error) {
         const { error } = createNewStickerSet
+        const description = error?.description || ''
 
-        if (error.description === 'Bad Request: invalid sticker set name is specified') {
-          await ctx.replyWithHTML(ctx.i18n.t('scenes.new_pack.error.telegram.name_invalid'), {
-            reply_to_message_id: ctx.message.message_id,
-            allow_sending_without_reply: true
-          })
-          return ctx.scene.enter('newPackName')
-        } else if (error.description === 'Bad Request: sticker set name is already occupied') {
-          await ctx.replyWithHTML(ctx.i18n.t('scenes.new_pack.error.telegram.name_occupied'), {
-            reply_to_message_id: ctx.message.message_id,
-            allow_sending_without_reply: true
-          })
-          return ctx.scene.enter('newPackName')
+        // Context-specific name validation errors keep their own keys —
+        // they appear at the "enter pack name" step and need step-specific
+        // copy. Other Telegram errors flow through the shared humanizer.
+        let messageText
+        if (description === 'Bad Request: invalid sticker set name is specified') {
+          messageText = ctx.i18n.t('scenes.new_pack.error.telegram.name_invalid')
+        } else if (description === 'Bad Request: sticker set name is already occupied') {
+          messageText = ctx.i18n.t('scenes.new_pack.error.telegram.name_occupied')
         } else {
-          await ctx.replyWithHTML(ctx.i18n.t('error.telegram', {
-            error: error.description
-          }), {
-            reply_to_message_id: ctx.message.message_id,
-            allow_sending_without_reply: true
-          })
-          return ctx.scene.enter('newPackName')
+          messageText = humanizeTelegramError(ctx, error)
         }
+
+        await ctx.replyWithHTML(messageText, {
+          reply_to_message_id: ctx.message.message_id,
+          allow_sending_without_reply: true
+        })
+        return ctx.scene.enter('newPackName')
       }
     }
   }
