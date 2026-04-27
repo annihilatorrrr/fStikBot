@@ -153,7 +153,7 @@ composer.on('inline_query', async (ctx, next) => {
     }
   }))
 
-  ctx.answerInlineQuery(results, {
+  await ctx.answerInlineQuery(results, {
     is_personal: true,
     cache_time: 30,
     next_offset: offset + limit
@@ -190,7 +190,7 @@ composer.on('inline_query', async (ctx, next) => {
     }
   ]
 
-  ctx.answerInlineQuery(results, {
+  await ctx.answerInlineQuery(results, {
     is_personal: true,
     cache_time: 30
   })
