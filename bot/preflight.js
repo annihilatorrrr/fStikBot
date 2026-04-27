@@ -5,6 +5,8 @@
 // Each check returns { ok, name, detail } so the caller can decide
 // whether to abort or proceed (some checks are advisory).
 
+const defaultLog = require('../utils/logger').scope('preflight')
+
 const requireBotToken = () => {
   const token = process.env.BOT_TOKEN
   if (!token) {
@@ -63,7 +65,7 @@ const pingTelegram = async (bot) => {
 }
 
 // Run all checks; abort process if any required check fails.
-const runPreflight = async ({ bot, dbConnection, log = console }) => {
+const runPreflight = async ({ bot, dbConnection, log = defaultLog }) => {
   const checks = []
 
   // Required env validations — synchronous, run first so we don't spend
@@ -82,15 +84,15 @@ const runPreflight = async ({ bot, dbConnection, log = console }) => {
 
   for (const check of checks) {
     if (check.ok) {
-      log.log(`✓ preflight: ${check.name}${check.detail ? ` — ${check.detail}` : ''}`)
+      log.info(`✓ ${check.name}${check.detail ? ` — ${check.detail}` : ''}`)
     } else {
-      log.error(`✗ preflight: ${check.name} — ${check.detail}`)
+      log.error(`✗ ${check.name} — ${check.detail}`)
     }
   }
 
   const failed = checks.filter((c) => !c.ok)
   if (failed.length > 0) {
-    log.error(`preflight: ${failed.length} check(s) failed — aborting startup`)
+    log.error(`${failed.length} check(s) failed — aborting startup`)
     process.exit(1)
   }
 }

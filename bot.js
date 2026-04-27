@@ -27,6 +27,7 @@ const registerCommands = require('./bot/commands')
 const launch = require('./bot/launch')
 const syncLocales = require('./bot/locale-sync')
 const { runPreflight } = require('./bot/preflight')
+const log = require('./utils/logger').scope('bot')
 
 global.startDate = new Date()
 
@@ -81,7 +82,7 @@ registerCommands(bot, privateMessage, {
   await launch(bot)
 
   // Don't block startup on the locale sync — it's eventually consistent.
-  syncLocales(bot, i18n).catch((err) => console.error('[locale-sync] failed:', err.message))
+  syncLocales(bot, i18n).catch((err) => log.error('[locale-sync] failed:', err.message))
 
   // Side-effect import: starts messaging queue polling
   require('./utils/messaging')
@@ -89,13 +90,13 @@ registerCommands(bot, privateMessage, {
   const monitorInterval = setInterval(() => updateMonitor(), MONITOR_INTERVAL_MS)
   if (monitorInterval.unref) monitorInterval.unref()
 })().catch((err) => {
-  console.error('Startup failed:', err?.stack || err)
+  log.error('Startup failed:', err?.stack || err)
   process.exit(1)
 })
 
 // Graceful shutdown — PM2 sends SIGTERM before killing
 const gracefulShutdown = (signal) => {
-  console.log(`${signal} received, shutting down gracefully...`)
+  log.info(`${signal} received, shutting down gracefully…`)
   bot.stop(signal)
   process.exit(0)
 }
@@ -106,8 +107,8 @@ process.on('SIGINT', gracefulShutdown)
 // behavior (it exits the process), we just make sure the cause is in
 // the log channel before PM2 restarts us. Without these, all we'd see
 // in PM2 logs is "process exited" with no stack trace.
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled rejection:', reason instanceof Error ? reason.stack : reason)
+process.on('unhandledRejection', (reason) => {
+  log.error('Unhandled rejection:', reason instanceof Error ? reason.stack : reason)
   // Re-throw so Node's default termination kicks in — promise state may
   // be inconsistent, restart is safer than continuing on corrupted state.
   // Use setImmediate so the error bubbles to uncaughtException with full
@@ -116,7 +117,7 @@ process.on('unhandledRejection', (reason, promise) => {
 })
 
 process.on('uncaughtException', (err, origin) => {
-  console.error(`Uncaught exception (origin=${origin}):`, err?.stack || err)
+  log.error(`Uncaught exception (origin=${origin}):`, err?.stack || err)
   // Don't try to clean up — state is unknown. PM2 will restart us.
   process.exit(1)
 })
