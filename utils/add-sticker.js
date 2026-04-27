@@ -266,7 +266,8 @@ const uploadSticker = async (userId, stickerSet, stickerFile, stickerExtra) => {
 const lastStickerTime = new Map()
 const STICKER_COOLDOWN = 1000 * 30 // 30 seconds
 
-// Periodic cleanup of old entries (every 5 minutes)
+// Periodic cleanup of old entries (every 5 minutes).
+// .unref() so this janitorial timer doesn't keep the process alive on shutdown.
 setInterval(() => {
   const now = Date.now()
   for (const [key, value] of lastStickerTime) {
@@ -274,7 +275,7 @@ setInterval(() => {
       lastStickerTime.delete(key)
     }
   }
-}, 1000 * 60 * 5)
+}, 1000 * 60 * 5).unref()
 
 module.exports = async (ctx, inputFile, toStickerSet, showResult = true) => {
   let stickerFile = inputFile

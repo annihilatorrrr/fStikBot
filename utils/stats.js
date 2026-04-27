@@ -16,6 +16,7 @@ const rtOP = io.metric({
 //   unit: 'user'
 // })
 
+// .unref() so this stats sampler doesn't keep the process alive on shutdown.
 setInterval(() => {
   const keys = Object.keys(stats.times)
 
@@ -46,7 +47,7 @@ setInterval(() => {
 
     delete stats.times[time]
   }
-}, 1000)
+}, 1000).unref()
 
 // setInterval(async () => {
 //   const usersCount = await db.User.count({

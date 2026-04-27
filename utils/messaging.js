@@ -23,14 +23,15 @@ function getConfig () {
   return cachedConfig
 }
 
-// Reload config every 5 minutes
+// Reload config every 5 minutes.
+// .unref() so this housekeeping timer doesn't keep the process alive on shutdown.
 setInterval(() => {
   try {
     cachedConfig = JSON.parse(fs.readFileSync('./config.json', 'utf8'))
   } catch (e) {
     console.error('Failed to reload config:', e.message)
   }
-}, 1000 * 60 * 5)
+}, 1000 * 60 * 5).unref()
 
 const messaging = async (messagingData) => {
   if (!redis) {
