@@ -68,7 +68,7 @@ packAbout.use((ctx, next) => {
             if (
               ctx.from.id === sharedUserId ||
               ctx.from.id === ctx.config.mainAdminId ||
-              ctx?.session?.userInfo?.adminRights.includes('pack')
+              ctx?.session?.userInfo?.adminRights?.includes('pack')
             ) {
               return `<a href="https://t.me/addstickers/${escapeHTML(pack.name)}"><s>${escapeHTML(pack.name)}</s></a>`
             } else {
@@ -146,7 +146,7 @@ packAbout.on(['sticker', 'text', 'forward'], async (ctx, next) => {
           if (
             ctx.from.id === sharedUserId ||
             ctx.from.id === ctx.config.mainAdminId ||
-            ctx?.session?.userInfo?.adminRights.includes('pack')
+            ctx?.session?.userInfo?.adminRights?.includes('pack')
           ) {
             return `<a href="https://t.me/addstickers/${escapeHTML(pack.name)}"><s>${escapeHTML(pack.name)}</s></a>`
           } else {
@@ -297,7 +297,7 @@ packAbout.on(['sticker', 'text', 'forward'], async (ctx, next) => {
         if (
           ctx.from.id === actualOwnerId ||
           ctx.from.id === ctx.config.mainAdminId ||
-          ctx?.session?.userInfo?.adminRights.includes('pack')
+          ctx?.session?.userInfo?.adminRights?.includes('pack')
         ) {
           return `<a href="https://t.me/addstickers/${escapeHTML(pack.name)}"><s>${escapeHTML(pack.name)}</s></a>`
         } else {

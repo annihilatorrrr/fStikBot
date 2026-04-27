@@ -124,8 +124,4 @@ adminPackBulkDelete.on('callback_query', async (ctx) => {
   await ctx.answerCbQuery('Unknown action')
 })
 
-adminPackBulkDelete.on('message', async (ctx) => {
-  await ctx.reply('Please send links to sticker packs or use the buttons provided.')
-})
-
 module.exports = adminPackBulkDelete
