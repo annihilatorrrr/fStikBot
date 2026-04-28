@@ -12,6 +12,14 @@ module.exports = async (ctx) => {
 
   let user = await query
 
+  // Bot API formally guarantees ctx.from.first_name, but deactivated /
+  // deleted accounts and rare anonymous-sender edges send it empty or
+  // missing. Coerce both to '' once so neither schema validation nor
+  // template-literal interpolation surprises us downstream.
+  const firstName = ctx.from.first_name || ''
+  const lastName = ctx.from.last_name || ''
+  const fullName = lastName ? `${firstName} ${lastName}` : firstName
+
   if (!user) {
     // First-message race: two parallel updates both see `null` here and
     // would both `new User() + save()`, producing E11000 on the second.
@@ -23,9 +31,9 @@ module.exports = async (ctx) => {
         $setOnInsert: {
           telegram_id: ctx.from.id,
           first_act: now,
-          first_name: ctx.from.first_name,
-          last_name: ctx.from.last_name,
-          full_name: `${ctx.from.first_name}${ctx.from.last_name ? ` ${ctx.from.last_name}` : ''}`,
+          first_name: firstName,
+          last_name: lastName,
+          full_name: fullName,
           username: ctx.from.username
         }
       },
@@ -39,9 +47,9 @@ module.exports = async (ctx) => {
     user.blocked = false
   }
 
-  user.first_name = ctx.from.first_name
-  user.last_name = ctx.from.last_name
-  user.full_name = `${ctx.from.first_name}${ctx.from.last_name ? ` ${ctx.from.last_name}` : ''}`
+  user.first_name = firstName
+  user.last_name = lastName
+  user.full_name = fullName
   user.username = ctx.from.username
   // No manual updatedAt — see save-wrap in bot/middleware.js. We bump it
   // via a throttled fire-and-forget updateOne instead, so unchanged-user

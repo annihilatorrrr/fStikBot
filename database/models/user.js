@@ -7,10 +7,13 @@ const userSchema = mongoose.Schema({
     unique: true,
     required: true
   },
-  first_name: {
-    type: String,
-    required: true
-  },
+  // Display-only field, never load-bearing. Telegram User.first_name is
+  // formally required by Bot API, but in practice it can arrive empty or
+  // missing (deleted/deactivated accounts, rare anonymous-sender edges).
+  // Mongoose String `required: true` rejects empty strings too, which
+  // would crash persistUserIfDirty on those updates — so we keep the
+  // field optional and let renderers handle the empty case.
+  first_name: String,
   last_name: String,
   username: String,
   stickerSet: {
