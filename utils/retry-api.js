@@ -85,22 +85,34 @@ function buildBlockedError (chatId, method) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// Rate-limit cooldown cache (method + optional chat_id)
+// Rate-limit cooldown cache (method + scope id)
 // ────────────────────────────────────────────────────────────────
 // Symmetric to blockedChats: when a call returns 429 with retry_after
-// larger than we can wait, we cache (method, chatId?) for retry_after
+// larger than we can wait, we cache (method, scopeId) for retry_after
 // seconds. Subsequent identical calls short-circuit with a synthetic
 // 429 instead of hitting the network and producing another log line.
 // This kills the classic post-restart "sendChatAction retry_after=7s"
 // spam without a hardcoded method list — Telegram itself tells us
-// which (method, chat) pair is in cooldown.
+// which (method, target) pair is in cooldown.
+//
+// Scope id is REQUIRED to cache. Without one we'd key by method only,
+// which collapses Telegram's per-chat / per-user / per-pack limits into
+// a single global lock — one user's per-pack 429 would block every other
+// user. See targetScopeId() for what counts as a scope.
 const rateLimitedCalls = new Map()
 
-function rateLimitKey (method, chatId) {
-  return chatId ? `${method}:${chatId}` : method
+function rateLimitKey (method, scopeId) {
+  return `${method}:${scopeId}`
 }
 
-function cacheRateLimit (method, chatId, retryAfterS) {
+function cacheRateLimit (method, scopeId, retryAfterS) {
+  // No scope = no caching. Method-only keys are too coarse: Telegram's
+  // limits are per-chat / per-user / per-pack, never per-bot-method.
+  // Caching globally turns a local stall into a system-wide lockout.
+  // The cost of skipping is one extra network call next time; the upside
+  // is no false-positive blocks.
+  if (!scopeId) return
+
   if (rateLimitedCalls.size >= RATE_LIMIT_CACHE_MAX) {
     const toRemove = Math.floor(RATE_LIMIT_CACHE_MAX * 0.1)
     const it = rateLimitedCalls.keys()
@@ -110,11 +122,11 @@ function cacheRateLimit (method, chatId, retryAfterS) {
       rateLimitedCalls.delete(key)
     }
   }
-  rateLimitedCalls.set(rateLimitKey(method, chatId), Date.now() + retryAfterS * 1000)
+  rateLimitedCalls.set(rateLimitKey(method, scopeId), Date.now() + retryAfterS * 1000)
 }
 
-function isRateLimitCached (method, chatId) {
-  const key = rateLimitKey(method, chatId)
+function isRateLimitCached (method, scopeId) {
+  const key = rateLimitKey(method, scopeId)
   const expiresAt = rateLimitedCalls.get(key)
   if (!expiresAt) return false
   if (expiresAt < Date.now()) {
@@ -125,19 +137,20 @@ function isRateLimitCached (method, chatId) {
 }
 
 /**
- * Returns remaining cooldown in seconds for a (method, chatId) pair, or 0
- * if not cooled down. Intended for callers that want to SHORT-CIRCUIT
+ * Returns remaining cooldown in seconds for a (method, scopeId) pair, or
+ * 0 if not cooled down. Intended for callers that want to SHORT-CIRCUIT
  * before starting expensive prep work (file download, sharp processing,
  * uploadStickerFile) that would only lead to another 429 on the real
  * action (addStickerToSet). Example: add-sticker.js checks this before
  * downloading a Telegram file that it would just re-upload anyway.
  *
  * @param {string} method
- * @param {number|string} [chatId]
+ * @param {number|string} [scopeId] chat_id, user_id, or sticker pack name
  * @returns {number} seconds remaining (0 if none)
  */
-function getRateLimitRemaining (method, chatId) {
-  const key = rateLimitKey(method, chatId)
+function getRateLimitRemaining (method, scopeId) {
+  if (!scopeId) return 0
+  const key = rateLimitKey(method, scopeId)
   const expiresAt = rateLimitedCalls.get(key)
   if (!expiresAt) return 0
   const remainingMs = expiresAt - Date.now()
@@ -148,8 +161,8 @@ function getRateLimitRemaining (method, chatId) {
   return Math.ceil(remainingMs / 1000)
 }
 
-function buildRateLimitError (method, chatId) {
-  const err = new Error(`Too Many Requests: cached 429 for ${method}${chatId ? `@${chatId}` : ''}`)
+function buildRateLimitError (method, scopeId) {
+  const err = new Error(`Too Many Requests: cached 429 for ${method}@${scopeId}`)
   err.code = 429
   err.description = 'Too Many Requests: cached'
   err.on = { method }
@@ -157,12 +170,24 @@ function buildRateLimitError (method, chatId) {
   return err
 }
 
-// Any payload that has a chat_id or user_id is "targeted" at a specific
-// chat. We don't look at method names — if Telegram routes it to a
-// specific chat, the cache applies.
-function targetChatId (data) {
+// Extract the rate-limit scope id from a Bot API payload.
+// Telegram applies three layers of limits on sticker ops in parallel:
+// per-bot (global), per-user-owner, and per-pack. We cache on whichever
+// is visible in the payload, in order of narrowness:
+//   - chat_id → per-chat limits  (sendMessage, sendChatAction, …)
+//   - user_id → per-user limits  (createNewStickerSet, addStickerToSet,
+//                                 replaceStickerInSet,
+//                                 setStickerSetThumbnail)
+//   - name    → per-pack limits  (setStickerSetTitle, deleteStickerSet,
+//                                 getStickerSet, …)
+// Payloads with neither (deleteStickerFromSet({sticker}),
+// setStickerEmojiList({sticker}), getCustomEmojiStickers({ids})) give us
+// no honest scope — those identify objects, not a rate-limit boundary —
+// so we return null and cacheRateLimit() skips them. One extra network
+// call beats a false-positive global lock.
+function targetScopeId (data) {
   if (!data || typeof data !== 'object') return null
-  return data.chat_id || data.user_id || null
+  return data.chat_id || data.user_id || data.name || null
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -252,17 +277,17 @@ function patchTelegramPrototype () {
   const originalCallApi = Telegram.prototype.callApi
 
   Telegram.prototype.callApi = function patchedCallApi (method, data = {}, ...rest) {
-    const chatId = targetChatId(data)
+    const scopeId = targetScopeId(data)
 
     // Short-circuit: recently-seen 403 for this chat_id/user_id.
-    if (chatId && isBlockedCached(chatId)) {
-      return Promise.reject(buildBlockedError(chatId, method))
+    if (scopeId && isBlockedCached(scopeId)) {
+      return Promise.reject(buildBlockedError(scopeId, method))
     }
 
-    // Short-circuit: server-confirmed 429 cooldown for (method, chat?)
+    // Short-circuit: server-confirmed 429 cooldown for (method, scope)
     // still in its retry_after window — skip the network and the log.
-    if (isRateLimitCached(method, chatId)) {
-      return Promise.reject(buildRateLimitError(method, chatId))
+    if (isRateLimitCached(method, scopeId)) {
+      return Promise.reject(buildRateLimitError(method, scopeId))
     }
 
     return withRetry(
@@ -274,14 +299,16 @@ function patchTelegramPrototype () {
       // found". Groups/supergroups have negative ids and 403 there is
       // usually "not enough rights" (bot demoted) — caching would
       // silently skip all sends for TTL, so we skip groups entirely.
-      if (error?.code === 403 && chatId > 0) cacheBlocked(chatId)
+      if (error?.code === 403 && scopeId > 0) cacheBlocked(scopeId)
 
       // 429 that withRetry already decided to fail-fast on (retry_after
       // exceeds maxWait) → cache so siblings don't each re-hit the wall.
+      // cacheRateLimit() refuses to cache scopeless calls (see comment
+      // there) so we don't need to gate on scopeId here.
       if (error?.code === 429) {
         const retryAfter = getRetryAfter(error)
         if (retryAfter && retryAfter > RETRY_MAX_WAIT_S) {
-          cacheRateLimit(method, chatId, retryAfter)
+          cacheRateLimit(method, scopeId, retryAfter)
         }
       }
 

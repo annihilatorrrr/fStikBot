@@ -300,6 +300,60 @@ async function test (name, fn) {
     assert.strictEqual(thirdErr.__cachedRateLimit, undefined, 'different chat gets real 429')
   })
 
+  await test('429 with retry_after > maxWait caches by pack name — siblings on same pack short-circuit', async () => {
+    let attempts = 0
+    stubResponder = () => {
+      attempts++
+      const err = new Error('Too Many Requests')
+      err.code = 429
+      err.description = 'Too Many Requests: retry after 8'
+      err.parameters = { retry_after: 8 }
+      return Promise.reject(err)
+    }
+    // Pack A: real 429, fails fast, populates (method, name) cache.
+    let firstErr
+    try { await tg.callApi('setStickerSetTitle', { name: 'pack_a', title: 'X' }) } catch (e) { firstErr = e }
+    assert.strictEqual(attempts, 1, 'first call must hit the network')
+    assert.strictEqual(firstErr.__cachedRateLimit, undefined, 'real 429 not marked as cached')
+
+    // Same pack name → short-circuited.
+    let secondErr
+    try { await tg.callApi('setStickerSetTitle', { name: 'pack_a', title: 'Y' }) } catch (e) { secondErr = e }
+    assert.strictEqual(attempts, 1, 'cached short-circuit must not hit network for same pack')
+    assert.strictEqual(secondErr.__cachedRateLimit, true, 'synthetic error carries flag')
+
+    // Different pack: per-pack scope is not shared, must hit network.
+    let thirdErr
+    try { await tg.callApi('setStickerSetTitle', { name: 'pack_b', title: 'Z' }) } catch (e) { thirdErr = e }
+    assert.strictEqual(attempts, 2, 'different pack must not inherit cooldown')
+    assert.strictEqual(thirdErr.__cachedRateLimit, undefined, 'different pack gets real 429')
+  })
+
+  await test('429 without chat/user/pack scope does NOT cache (no global method-only lockout)', async () => {
+    // Regression: deleteStickerFromSet payload is { sticker: file_id } — no
+    // chat_id / user_id. A single per-pack 429 with retry_after > maxWait
+    // must NOT cache the method globally; doing so would block every other
+    // user's deleteStickerFromSet for the entire retry_after window.
+    let attempts = 0
+    stubResponder = () => {
+      attempts++
+      const err = new Error('Too Many Requests')
+      err.code = 429
+      err.description = 'Too Many Requests: retry after 30'
+      err.parameters = { retry_after: 30 }
+      return Promise.reject(err)
+    }
+    const sizeBefore = _rateLimitCacheSize()
+    await assert.rejects(tg.callApi('deleteStickerFromSet', { sticker: 'file_a' }))
+    assert.strictEqual(attempts, 1, 'first call must hit the network and fail-fast')
+    assert.strictEqual(_rateLimitCacheSize(), sizeBefore, 'scopeless 429 must not populate cache')
+
+    // Second call (different sticker, same method): must also hit network,
+    // not be short-circuited by a stale method-only cache entry.
+    await assert.rejects(tg.callApi('deleteStickerFromSet', { sticker: 'file_b' }))
+    assert.strictEqual(attempts, 2, 'second call must hit network — no stale method-only lock')
+  })
+
   await test('429 cache only triggers when retry_after > maxWait (not for retriable 429s)', async () => {
     // retry_after=2s is ≤ default maxWait=5s → withRetry retries and succeeds.
     // We must NOT cache a transient 429 that retry already solved, otherwise
