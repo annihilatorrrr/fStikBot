@@ -14,6 +14,7 @@ const {
   substrUnicode
 } = require('../utils')
 const { humanizeTelegramError } = require('../utils/telegram-error')
+const log = require('../utils/logger').scope('pack-new')
 
 const { match } = I18n
 
@@ -469,14 +470,20 @@ newPackConfirm.enter(async (ctx, next) => {
 
   if (createNewStickerSet) {
     if (!inline && !ctx?.session?.scene?.copyPack) {
+      // Delayed cleanup of the bootstrap placeholder Telegram requires for
+      // createNewStickerSet. Runs outside any handler timeline, so a
+      // single top-level try/catch is mandatory — an unhandled rejection
+      // here (e.g. getStickerSet 404 if the user nuked the pack first)
+      // would crash the process.
       setTimeout(async () => {
-        const getStickerSet = await ctx.telegram.getStickerSet(name)
-        const stickerInfo = getStickerSet.stickers[0]
-        if (!stickerInfo) return
-
-        await ctx.telegram.deleteStickerFromSet(stickerInfo.file_id).catch(error => {
-          console.error('Error while deleting sticker from set: ', error)
-        })
+        try {
+          const set = await ctx.telegram.getStickerSet(name)
+          const placeholder = set.stickers[0]
+          if (!placeholder) return
+          await ctx.telegram.deleteStickerFromSet(placeholder.file_id)
+        } catch (error) {
+          log.error('placeholder cleanup failed:', error)
+        }
       }, 1000 * 10)
     }
 
@@ -685,14 +692,14 @@ newPackConfirm.enter(async (ctx, next) => {
         const placeholderSticker = getStickerSet.stickers[0]
         if (placeholderSticker) {
           await ctx.telegram.deleteStickerFromSet(placeholderSticker.file_id).catch(error => {
-            console.error('Error while deleting placeholder sticker: ', error)
+            log.error('failed to delete placeholder sticker:', error)
           })
         }
       } else if (getStickerSet?.stickers?.length === 1 && successCount === 0 && pendingCount === 0) {
         // All stickers failed - pack only has placeholder
         // Delete the entire pack since it's useless
         await ctx.telegram.callApi('deleteStickerSet', { name }).catch(error => {
-          console.error('Error while deleting empty sticker set: ', error)
+          log.error('failed to delete empty sticker set:', error)
         })
         // Remove from database
         await ctx.db.StickerSet.deleteOne({ name }).catch(() => {})

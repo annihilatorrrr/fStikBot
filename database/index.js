@@ -54,8 +54,11 @@ db.User.getData = async (tgUser) => {
 db.User.updateData = async (tgUser) => {
   const user = await db.User.getData(tgUser)
 
-  user.first_name = tgUser.first_name
-  user.last_name = tgUser.last_name
+  // Coerce missing/empty Telegram fields to '' once — same reason as
+  // utils/user-update.js: deleted/deactivated accounts can omit
+  // first_name, and we don't want undefined sneaking into the DB.
+  user.first_name = tgUser.first_name || ''
+  user.last_name = tgUser.last_name || ''
   user.username = tgUser.username
   user.updatedAt = new Date()
   await user.save()
