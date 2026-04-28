@@ -17,6 +17,18 @@ const ERROR_PATTERNS = [
 
 const RATE_LIMIT_CODE = 429
 
+// Telegram error descriptions are usually short, but rare 400s come back
+// with a multi-kilobyte JSON dump. We render this string into i18n
+// templates that may feed answerCbQuery (200-char hard limit) or
+// replyWithHTML (4096-char limit). Clamp at the source so the sink
+// can't blow up with MESSAGE_TOO_LONG.
+const truncateDescription = (s, max) => (
+  s.length > max ? `${s.slice(0, max - 1)}…` : s
+)
+// Default fits answerCbQuery (200) once the i18n template wraps it in
+// "Помилка Telegram: <code>…</code>" (~30 chars of prefix/suffix).
+const DEFAULT_MAX_DESCRIPTION_LEN = 150
+
 const matchTelegramErrorReason = (error) => {
   if (!error) return null
   if (error.code === RATE_LIMIT_CODE) return 'rate_limited'
@@ -49,7 +61,15 @@ const humanizeTelegramError = (ctx, error, opts = {}) => {
   if (reason) return ctx.i18n.t(`error.telegram_reasons.${reason}`)
 
   const description = error?.description || error?.message || 'Unknown error'
-  return ctx.i18n.t(opts.fallbackKey || 'error.telegram', { error: description })
+  const maxLen = opts.maxDescriptionLen || DEFAULT_MAX_DESCRIPTION_LEN
+  return ctx.i18n.t(opts.fallbackKey || 'error.telegram', {
+    error: truncateDescription(description, maxLen)
+  })
 }
 
-module.exports = { matchTelegramErrorReason, extractRetryAfterSeconds, humanizeTelegramError }
+module.exports = {
+  matchTelegramErrorReason,
+  extractRetryAfterSeconds,
+  humanizeTelegramError,
+  truncateDescription
+}

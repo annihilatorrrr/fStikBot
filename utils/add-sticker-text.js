@@ -2,6 +2,12 @@ const path = require('path')
 const Markup = require('telegraf/markup')
 const I18n = require('telegraf-i18n')
 const escapeHTML = require('./html-escape')
+const { truncateDescription } = require('./telegram-error')
+
+// add-sticker-text feeds telegram.sendMessage (4096-char hard limit).
+// Truncate raw API descriptions well below that so a Telegram dump can't
+// push our final message past the limit and trigger MESSAGE_TOO_LONG.
+const SEND_MESSAGE_DESCRIPTION_MAX = 1000
 
 const i18n = new I18n({
   directory: path.resolve(__dirname, '../locales'),
@@ -70,12 +76,14 @@ module.exports = (addStickerResult, lang) => {
       const hit = TELEGRAM_ERROR_MAP.find(([needle]) => errDescription.includes(needle))
       messageText = hit
         ? i18n.t(lang, hit[1])
-        : i18n.t(lang, 'error.telegram', { error: errDescription })
+        : i18n.t(lang, 'error.telegram', {
+          error: truncateDescription(errDescription, SEND_MESSAGE_DESCRIPTION_MAX)
+        })
     } else if (addStickerResult.error === 'ITS_ANIMATED') {
       messageText = i18n.t(lang, 'sticker.add.error.file_type')
     } else {
       messageText = i18n.t(lang, 'error.telegram', {
-        error: addStickerResult.error
+        error: truncateDescription(String(addStickerResult.error), SEND_MESSAGE_DESCRIPTION_MAX)
       })
     }
   }
