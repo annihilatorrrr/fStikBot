@@ -6,6 +6,7 @@ const rateLimit = require('telegraf-ratelimit')
 const { perfStage, perfRecord, perfTick, ENABLED: PERF_TIMING_ENABLED } = require('../utils/perf-timing')
 const { touchLastSeen } = require('../utils/last-seen')
 const handleError = require('../handlers/catch')
+const log = require('../utils/logger').scope('middleware')
 
 const MAX_CHAIN_ACTIONS = 15
 
@@ -138,7 +139,7 @@ module.exports = (bot, {
     ) {
       ctx.session.userInfo.locale = 'uk'
       if (typeof ctx.session.userInfo.save === 'function') {
-        ctx.session.userInfo.save().catch(err => console.error('Failed to save user locale:', err.message))
+        ctx.session.userInfo.save().catch(err => log.error('Failed to save user locale:', err.message))
       }
       ctx.i18n.locale('uk')
     }
@@ -169,7 +170,7 @@ module.exports = (bot, {
     const user = ctx.session?.userInfo
     if (!user || typeof user.save !== 'function') return null
     if (user.isModified && user.isModified()) {
-      return user.save().catch(err => console.error('Failed to save user:', err.message))
+      return user.save().catch(err => log.error('Failed to save user:', err.message))
     }
     // Not dirty — no save, just bump last-seen (throttled, async).
     touchLastSeen(ctx.db.User, user._id)

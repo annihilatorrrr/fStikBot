@@ -18,6 +18,7 @@
 // Design principle: no hardcoded method names or error-description
 // strings. Uniform rules driven by payload shape and HTTP semantics.
 const Telegram = require('telegraf/telegram')
+const log = require('./logger').scope('retry-api')
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -227,8 +228,8 @@ async function withRetry (fn, options = {}) {
       if (!retryAfter) throw error
 
       if (retryAfter > maxWait) {
-        console.log(
-          `[Retry] 429 on ${method}, retry_after=${retryAfter}s > maxWait=${maxWait}s — failing fast`
+        log.warn(
+          `429 on ${method}, retry_after=${retryAfter}s > maxWait=${maxWait}s — failing fast`
         )
         throw error
       }
@@ -236,8 +237,8 @@ async function withRetry (fn, options = {}) {
       if (attempt >= maxRetries) throw error
 
       const waitMs = retryAfter * 1000 + Math.floor(Math.random() * RETRY_JITTER_MAX_MS)
-      console.log(
-        `[Retry] 429 on ${method}, waiting ${(waitMs / 1000).toFixed(1)}s ` +
+      log.info(
+        `429 on ${method}, waiting ${(waitMs / 1000).toFixed(1)}s ` +
         `(attempt ${attempt + 1}/${maxRetries})`
       )
       await delay(waitMs)
